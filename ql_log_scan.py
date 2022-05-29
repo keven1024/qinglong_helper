@@ -33,13 +33,13 @@ export QL_LOG_NPM="npm"
 class QlLogScan(Depend):
     def __init__(self):
         self.pyname = re.search(r"(?<=\/)[a-zA-Z0-9-_]+(?=\.py)", __file__).group()
-        self.only_check()
+        print(self.only_check(self.pyname))
         self.ql_log_path = self.get_env("QL_LOG_PATH", self.get_ql_path() + "log/")
         self.filter_dir_list = self.not2append([".tmp", "update"], self.str2list(self.get_env("QL_LOG_BLACK_DIR")))
         self.filter_log_list = self.not2append(['task_error.log', 'start.log'],
                                                self.str2list(self.get_env("QL_LOG_BLACK_FILE")))
-        self.history_scan_deepin = int(self.get_env("QL_LOG_SCAN_DEEPIN", '0'))
-        self.auto_install_depend = bool(self.get_env("QL_LOG_AUTO_INSTALL_DEPEND", False))
+        self.history_scan_deepin = self.get_env("QL_LOG_SCAN_DEEPIN", 0)
+        self.auto_install_depend = self.get_env("QL_LOG_AUTO_INSTALL_DEPEND", False)
         self.npm = self.get_env("QL_LOG_NPM", "npm")
         self.log_stat = {
             "all": 0,
@@ -101,7 +101,7 @@ class QlLogScan(Depend):
                         self.log_stat["all"] += 1
 
     @staticmethod
-    def format_log_date( text):
+    def format_log_date(text):
         text = text.split("-")
         return text[0] + "年" + text[1] + "月" + text[2] + "日" + text[3] + "时"
 
