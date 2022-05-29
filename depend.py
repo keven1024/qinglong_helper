@@ -63,6 +63,8 @@ class Depend:
             with open(only_path, 'r') as f:
                 if f.read(2048) != pyabspath:
                     result += "🙄检测到其他同类型的青龙日志分析脚本存在，拒绝运行!\n"
+                    load_send()
+                    send(pyname,result)
                     exit(0)
                 else:
                     result += "😁脚本唯一性检测通过，继续运行!\n"
@@ -71,3 +73,17 @@ class Depend:
                 f.writelines(pyabspath)
                 result += "🙄检测到第一次运行，已写入唯一性检测文件，如无特殊情况请勿删除\n"
         return result
+
+def load_send():
+    global send
+    cur_path = os.path.abspath(os.path.dirname(__file__))
+    sys.path.append(cur_path)
+    if os.path.exists(cur_path + "/notify.py"):
+        try:
+            from notify import send
+        except:
+            send = False
+            print("加载通知服务失败~")
+    else:
+        send = False
+        print("加载通知服务失败~")
