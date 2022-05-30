@@ -1,0 +1,21 @@
+{
+    "version": 20220530,
+    "python": {
+        "Crypto": {
+            "type": "public",
+            "module": [
+                "pycryptodome",
+                "crypto",
+                "pycrypto"
+            ]
+        }
+    },
+    "nodejs": {
+        "execjs": {
+            "type": "public",
+            "module": [
+                "PyExecJS"
+            ]
+        }
+    }
+}

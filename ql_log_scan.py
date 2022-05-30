@@ -35,10 +35,11 @@ export QL_LOG_NPM="npm"
 class QlLogScan(Depend):
     def __init__(self):
         self.pyname = re.search(r"(?<=\/)[a-zA-Z0-9-_]+(?=\.py)", __file__).group()
-        print(self.only_check(self.pyname,os.path.abspath(__file__)))
+        print(self.only_check(self.pyname, os.path.abspath(__file__)))
         self.ql_log_path = self.get_env("QL_LOG_PATH", self.get_ql_path() + "log/")
-        self.filter_dir_list = self.not2append([".tmp", "update"], self.str2list(self.get_env("QL_LOG_BLACK_DIR")))
-        self.filter_log_list = self.not2append(['task_error.log', 'start.log'],
+        self.filter_dir_list = self.not2append(["^\.tmp$", "^update$", self.pyname + "$"],
+                                               self.str2list(self.get_env("QL_LOG_BLACK_DIR")))
+        self.filter_log_list = self.not2append(['task_error\.log', 'start\.log'],
                                                self.str2list(self.get_env("QL_LOG_BLACK_FILE")))
         self.history_scan_deepin = self.get_env("QL_LOG_SCAN_DEEPIN", "0")
         self.auto_install_depend = self.get_env("QL_LOG_AUTO_INSTALL_DEPEND", False)
@@ -66,10 +67,11 @@ class QlLogScan(Depend):
     def analysisLog(self):
         for path, dir_list, file_list in os.walk(self.ql_log_path):
             dir_name = path.replace(self.ql_log_path, "")
-            if dir_name not in self.filter_dir_list:
+            if not self.re_filter_list(dir_name, self.filter_dir_list):
                 for file_name in file_list:
-                    if file_name not in self.filter_log_list and re.search(r"(.*?).log$", file_name) and file_name[
-                                                                                                         :13] in self.LogNameHeadList:
+                    if not self.re_filter_list(file_name, self.filter_log_list) and re.search(r"(.*?).log$",
+                                                                                              file_name) and file_name[
+                                                                                                             :13] in self.LogNameHeadList:
                         # 读取日志
                         log_file = open(os.path.join(path, file_name), "r")
                         log_text = log_file.read()
@@ -117,15 +119,17 @@ class QlLogScan(Depend):
             self.LogNameHeadList[
                 0]) + " 的日志报告：\n"
         result += "✅正常运行脚本：" + str(self.log_stat["all"]) + " 次\n"
-        result += "⛔异常运行脚本：" + str(self.log_stat["nodejs_err"] + self.log_stat["python_err"]) + " 次，占比 " + str(
-            round(
-                (float(self.log_stat["nodejs_err"] + self.log_stat["python_err"]) / float(self.log_stat["all"]) * 100),
-                2)) + " %\n"
-        result += "🧐其中:\n"
-        result += "    🕵️‍♂️Nodejs异常：" + str(self.log_stat["nodejs_err"]) + " 次，占比 " + str(
-            round((float(self.log_stat["nodejs_err"]) / float(self.log_stat["all"]) * 100), 2)) + " %\n"
-        result += "    🕵️‍♂️Python异常：" + str(self.log_stat["python_err"]) + " 次，占比 " + str(
-            round((float(self.log_stat["python_err"]) / float(self.log_stat["all"]) * 100), 2)) + " %\n"
+        if self.log_stat["all"] != 0:
+            result += "⛔异常运行脚本：" + str(self.log_stat["nodejs_err"] + self.log_stat["python_err"]) + " 次，占比 " + str(
+                round(
+                    (float(self.log_stat["nodejs_err"] + self.log_stat["python_err"]) / float(
+                        self.log_stat["all"]) * 100),
+                    2)) + " %\n"
+            result += "🧐其中:\n"
+            result += "    🕵️‍♂️Nodejs异常：" + str(self.log_stat["nodejs_err"]) + " 次，占比 " + str(
+                round((float(self.log_stat["nodejs_err"]) / float(self.log_stat["all"]) * 100), 2)) + " %\n"
+            result += "    🕵️‍♂️Python异常：" + str(self.log_stat["python_err"]) + " 次，占比 " + str(
+                round((float(self.log_stat["python_err"]) / float(self.log_stat["all"]) * 100), 2)) + " %\n"
         if len_nodejs_depend > 0 or len_python_depend > 0:
             result += "👮‍♂️依赖检测: " + (
                 "☢已开启自动补全依赖,将执行shell命令,请小心恶意脚本👿" if self.auto_install_depend else "❎未开启自动补全依赖，请手动补齐以下依赖🤗") + "\n"
@@ -148,26 +152,27 @@ class QlLogScan(Depend):
     def install_depend(self):
         len_nodejs_depend = len(self.log_stat["nodejs_depend"])
         len_python_depend = len(self.log_stat["python_depend"])
+        len_all_depend = len_nodejs_depend + len_python_depend
         if len_nodejs_depend > 0:
             for i in range(len_nodejs_depend):
                 shell = "⚙当前正在自动安装NodeJs依赖: " + self.log_stat["nodejs_depend"][i] + "\n"
-                shell_exec = npm + ' install ' + self.log_stat["nodejs_depend"][i]
+                shell_exec = 'cd /ql/ && ' + npm + ' install ' + self.log_stat["nodejs_depend"][i]
                 shell += "🔨执行命令: " + shell_exec + "\n"
-                print(shell)
+                # print(shell)
                 shell_log = subprocess.run(shell_exec, shell=True, capture_output=True, text=True).stdout
                 shell += str(shell_log) + "\n\n"
-                print(shell_log)
-                send("🐲青龙自动安装依赖(" + str(i + 1) + "/" + str(len_nodejs_depend) + ")", shell)
+                # print(shell_log)
+                send("🐲青龙自动安装依赖(" + str(i + 1) + "/" + str(len_all_depend) + ")", shell)
         if len_python_depend > 0:
             for i in range(len_python_depend):
                 shell = "⚙当前正在自动安装Python依赖: " + self.log_stat["python_depend"][i] + "\n"
                 shell_exec = 'pip3 install ' + self.log_stat["python_depend"][i]
                 shell += "🔨执行命令: " + shell_exec + "\n"
-                print(shell)
+                # print(shell)
                 shell_log = subprocess.run(shell_exec, shell=True, capture_output=True, text=True).stdout
                 shell += str(shell_log) + "\n\n"
-                print(shell_log)
-                send("🐲青龙自动安装依赖(" + str(i + 1) + "/" + str(len_python_depend) + ")", shell)
+                # print(shell_log)
+                send("🐲青龙自动安装依赖(" + str(i + 1 + len_nodejs_depend) + "/" + str(len_all_depend) + ")", shell)
 
 
 def load_send():

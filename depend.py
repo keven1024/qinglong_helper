@@ -56,6 +56,13 @@ class Depend:
                 appended.append(i)
         return appended
 
+    @staticmethod
+    def re_filter_list(string, filter_list):
+        for i in filter_list:
+            if re.search(i, string):
+                return True
+        return False
+
     def only_check(self, pyname, pyabspath):
         only_path = self.get_ql_path() + pyname + '_by_keven1024'
         result = "☺当前脚本目录为: " + str(pyabspath) + "\n"
@@ -64,7 +71,7 @@ class Depend:
                 if f.read(2048) != pyabspath:
                     result += "🙄检测到其他同类型的青龙日志分析脚本存在，拒绝运行!\n"
                     load_send()
-                    send(pyname,result)
+                    send(pyname, result)
                     exit(0)
                 else:
                     result += "😁脚本唯一性检测通过，继续运行!\n"
@@ -73,6 +80,7 @@ class Depend:
                 f.writelines(pyabspath)
                 result += "🙄检测到第一次运行，已写入唯一性检测文件，如无特殊情况请勿删除\n"
         return result
+
 
 def load_send():
     global send
