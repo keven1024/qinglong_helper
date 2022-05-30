@@ -56,7 +56,7 @@ class QlLogScan(Depend):
         self.analysisLog()
         self.showAnalysisLog()
         if self.auto_install_depend:
-            self.install_depend()
+            self.auto_depend()
 
     def generateLogNameHeadList(self):
         scan_list = []
@@ -149,30 +149,89 @@ class QlLogScan(Depend):
         send("🐲青龙日志分析", result)
         return result
 
-    def install_depend(self):
+    def auto_depend(self):
         len_nodejs_depend = len(self.log_stat["nodejs_depend"])
         len_python_depend = len(self.log_stat["python_depend"])
         len_all_depend = len_nodejs_depend + len_python_depend
         if len_nodejs_depend > 0:
             for i in range(len_nodejs_depend):
-                shell = "⚙当前正在自动安装NodeJs依赖: " + self.log_stat["nodejs_depend"][i] + "\n"
-                shell_exec = 'cd /ql/ && ' + npm + ' install ' + self.log_stat["nodejs_depend"][i]
-                shell += "🔨执行命令: " + shell_exec + "\n"
-                # print(shell)
-                shell_log = subprocess.run(shell_exec, shell=True, capture_output=True, text=True).stdout
-                shell += str(shell_log) + "\n\n"
-                # print(shell_log)
-                send("🐲青龙自动安装依赖(" + str(i + 1) + "/" + str(len_all_depend) + ")", shell)
+                shell_log = "🤖检测是否安装NodeJs依赖: " + self.log_stat["nodejs_depend"][i] + "\n"
+                check_result = self.check_depend(self.log_stat["nodejs_depend"][i], "nodejs")
+                if check_result:
+                    shell_log += "📦" + str(check_result) + "已安装, 跳过安装\n"
+                else:
+                    shell_log += "⚙当前正在自动安装NodeJs依赖: " + self.log_stat["nodejs_depend"][i] + "\n"
+                    install_result = self.install_depend(self.log_stat["nodejs_depend"][i], "nodejs")
+                    shell_log += "🔨执行命令: " + install_result[0] + "\n"
+                    if install_result[2] != '':
+                        shell_log += "⛔出错了: \n" + install_result[2] + "\n\n"
+                    elif install_result[1] != '':
+                        shell_log += "✅执行完成: \n" + install_result[1] + "\n\n"
+                    send("🐲青龙自动安装依赖(" + str(i + 1) + "/" + str(len_all_depend) + ")", shell_log)
         if len_python_depend > 0:
             for i in range(len_python_depend):
-                shell = "⚙当前正在自动安装Python依赖: " + self.log_stat["python_depend"][i] + "\n"
-                shell_exec = 'pip3 install ' + self.log_stat["python_depend"][i]
-                shell += "🔨执行命令: " + shell_exec + "\n"
-                # print(shell)
-                shell_log = subprocess.run(shell_exec, shell=True, capture_output=True, text=True).stdout
-                shell += str(shell_log) + "\n\n"
-                # print(shell_log)
-                send("🐲青龙自动安装依赖(" + str(i + 1 + len_nodejs_depend) + "/" + str(len_all_depend) + ")", shell)
+                shell_log = "🤖检测是否安装Python依赖: " + self.log_stat["python_depend"][i] + "\n"
+                check_result = self.check_depend(self.log_stat["python_depend"][i], "python")
+                if check_result:
+                    shell_log += "📦" + str(check_result) + "已安装, 跳过安装\n"
+                else:
+                    shell_log += "⚙当前正在自动安装Python依赖: " + self.log_stat["python_depend"][i] + "\n"
+                    install_result = self.install_depend(self.log_stat["python_depend"][i], "python")
+                    shell_log += "🔨执行命令: " + install_result[0] + "\n"
+                    if install_result[2] != '':
+                        shell_log += "⛔出错了: \n" + install_result[2] + "\n\n"
+                    elif install_result[1] != '':
+                        shell_log += "✅执行完成: \n" + install_result[1] + "\n\n"
+                    send("🐲青龙自动安装依赖(" + str(i + 1 + len_nodejs_depend) + "/" + str(len_all_depend) + ")", shell_log)
+
+    def install_depend(self, package, package_type):
+        package = package.replace("+", "\+")
+        if package_type == "nodejs":
+            install_exec = 'cd /ql/ && ' + self.npm + ' install ' + package
+        elif package_type == "python":
+            install_exec = 'pip3 install ' + package
+        elif package_type == "docker":
+            install_exec = 'apk update && apk add ' + package
+
+        if install_exec:
+            install = subprocess.run(install_exec, shell=True, capture_output=True, text=True)
+            install_log = install.stdout
+            install_err = install.stderr
+            return install_exec, install_log, install_err
+        else:
+            return None
+
+    def check_depend(self, package, package_type):
+        package = package.replace("+", "\+")
+        if package_type == "nodejs":
+            list_exec = 'cd /ql/ && ' + self.npm + ' list|grep ' + package
+            list_log = subprocess.run(list_exec, shell=True, capture_output=True, text=True).stdout
+            npm_re = re.search(r"[\s]" + package + "@[\d.]+", list_log)
+            pnpm_re = re.search(r"^" + package + " [\d.]+", list_log)
+            if npm_re:
+                return npm_re.group()
+            elif pnpm_re:
+                return pnpm_re.group()
+            else:
+                return None
+        elif package_type == "python":
+            list_exec = 'pip3 list|grep ' + package
+            list_log = subprocess.run(list_exec, shell=True, capture_output=True, text=True).stdout
+            pip_re = re.search(package + "[ ]+[\d.]+", list_log)
+            if pip_re:
+                return pip_re.group()
+            else:
+                return None
+        elif package_type == "docker":
+            list_exec = 'apk list|grep ' + package
+            list_log = subprocess.run(list_exec, shell=True, capture_output=True, text=True).stdout
+            docker_re = re.search(package + "-[\d.]+", list_log)
+            if docker_re:
+                return docker_re.group()
+            else:
+                return None
+        else:
+            return None
 
 
 def load_send():
