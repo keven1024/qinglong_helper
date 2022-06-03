@@ -9,8 +9,6 @@ from depend import Depend
 cron: 30 23 * * *
 new Env('青龙日志分析 && 自动补全依赖');
 ########环境变量设置#########
-## (非必填) 脚本唯一性检测，请在此处填写你想运行的脚本的绝对路径，其他脚本检测到此处会停止运行
-QL_LOG_SCAN_SCRIPT_PATH=
 
 ## (非必填)指定日志目录: 默认自动识别青龙目录，出现错误才需要手动指定日志目录
 export QL_LOG_PATH="/ql/data/log/"
