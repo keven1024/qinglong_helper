@@ -32,7 +32,7 @@ export QL_LOG_NPM="npm"
 
 class QlLogScan(Depend):
     def __init__(self):
-        self.pyname = re.search(r"(?<=\/)[a-zA-Z0-9-_]+(?=\.py)", __file__).group()
+        self.pyname = os.path.basename(__file__)
         print(self.only_check(self.pyname, os.path.abspath(__file__)))
         self.ql_log_path = self.get_env("QL_LOG_PATH", self.get_ql_path() + "log/")
         self.filter_dir_list = self.not2append(["^\.tmp$", "^update$", self.pyname + "$"],
