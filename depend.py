@@ -1,3 +1,4 @@
+import json
 import re
 import sys
 import os
@@ -63,21 +64,39 @@ class Depend:
                 return True
         return False
 
-    def only_check(self, pyname, pyabspath):
+    def only_check(self, pyname, pyabspath,osenv=None):
         only_path = self.get_ql_path() + pyname + '_by_keven1024'
         result = "☺当前脚本目录为: " + str(pyabspath) + "\n"
+        j_data = {
+            "py_path": None
+        }
+        if osenv and self.get_env(osenv):
+            result += "😏检测到环境变量：" + str(osenv) + " = " + self.get_env(osenv) + " 将按照该路径为准\n"
+            pyabspath = self.get_env(osenv)
         if os.path.exists(only_path):
-            with open(only_path, 'r') as f:
-                if f.read(2048) != pyabspath:
+            with open(only_path, 'r+') as f:
+                py_data = f.read(2097152)
+                if py_data == pyabspath:
+                    # 对旧版转换为json格式
+                    j_data["py_path"] = pyabspath
+                    f.seek(0, os.SEEK_SET)
+                    result += "😏检测到旧版检测文件，自动转换新版\n"
+                    f.writelines(json.dumps(j_data))
+                try:
+                    j_data = json.loads(py_data)
+                except:
+                    pass
+                if j_data["py_path"] and j_data["py_path"] == pyabspath:
+                    result += "😁脚本唯一性检测通过，继续运行!\n"
+                else:
                     result += "🙄检测到其他同类型的青龙日志分析脚本存在，拒绝运行!\n"
                     load_send()
                     send(pyname, result)
                     exit(0)
-                else:
-                    result += "😁脚本唯一性检测通过，继续运行!\n"
         else:
             with open(only_path, "w") as f:
-                f.writelines(pyabspath)
+                j_data["py_path"] = pyabspath
+                f.writelines(json.dumps(j_data))
                 result += "🙄检测到第一次运行，已写入唯一性检测文件，如无特殊情况请勿删除\n"
         return result
 

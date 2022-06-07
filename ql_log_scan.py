@@ -1,14 +1,19 @@
+import json
 import os
 import re
 import time
 import sys
 import subprocess
+import traceback
 from depend import Depend
 
 '''
 cron: 30 23 * * *
 new Env('青龙日志分析 && 自动补全依赖');
 ########环境变量设置#########
+
+## (非必填) 脚本唯一性检测，请在此处填写你想运行的脚本的绝对路径，其他脚本检测到路径与此变量不符将会停止运行
+QL_LOG_SCAN_SCRIPT_PATH=
 
 ## (非必填)指定日志目录: 默认自动识别青龙目录，出现错误才需要手动指定日志目录
 export QL_LOG_PATH="/ql/data/log/"
@@ -32,8 +37,8 @@ export QL_LOG_NPM="npm"
 
 class QlLogScan(Depend):
     def __init__(self):
-        self.pyname = os.path.basename(__file__)
-        print(self.only_check(self.pyname, os.path.abspath(__file__)))
+        self.pyname = os.path.basename(__file__).replace(".py", "")
+        print(self.only_check(self.pyname, os.path.abspath(__file__),"QL_LOG_SCAN_SCRIPT_PATH"))
         self.ql_log_path = self.get_env("QL_LOG_PATH", self.get_ql_path() + "log/")
         self.filter_dir_list = self.not2append(["^\.tmp$", "^update$", self.pyname + "$"],
                                                self.str2list(self.get_env("QL_LOG_BLACK_DIR")))
@@ -48,7 +53,8 @@ class QlLogScan(Depend):
             "python_err": 0,
             "err_dict": {},
             "nodejs_depend": [],
-            "python_depend": []
+            "python_depend": [],
+            "readlog_err" :[]
         }
         self.LogNameHeadList = self.generateLogNameHeadList()
         self.analysisLog()
@@ -72,35 +78,41 @@ class QlLogScan(Depend):
                                                                                                              :13] in self.LogNameHeadList:
                         # 读取日志
                         log_file = open(os.path.join(path, file_name), "r")
-                        log_text = log_file.read()
-                        log_file.close()
-                        # 分析日志
-                        nodejs_err_list = re.findall(r"Error\:(.*\s?)Require stack\:", log_text)
-                        python_err_list = re.findall(
-                            r"Traceback \(most recent call last\):([\n\s]+File[\s\S]*?, line [\d]+, in[\s\S]*?["
-                            r"\s\S]*?\n[\s\S]*?\n)+(.*?)\n",
+                        try:
+                            log_text = log_file.read(2097152)
+                            log_file.close()
+                            # 分析日志
+                            nodejs_err_list = re.findall(r"Error\:(.*\s?)Require stack\:", log_text)
+                            python_err_list = re.findall(
+                                r"Traceback \(most recent call last\):([\n\s]+File[\s\S]*?, line [\d]+, in[\s\S]*?["
+                                r"\s\S]*?\n[\s\S]*?\n)+(.*?)\n",
                             log_text)
-                        if nodejs_err_list:
-                            self.log_stat["nodejs_err"] += len(nodejs_err_list)
-                            self.log_stat["err_dict"][dir_name] = []
-                            for i in nodejs_err_list:
-                                v = i.strip()
-                                self.log_stat["err_dict"][dir_name].append({"type": "NodeJs", "log": v})
-                                # 依赖缺失判断
-                                miss_depend = re.search(r"Cannot find module '([a-zA-Z\d_-]+)'", v)
-                                if miss_depend and miss_depend.group(1) not in self.log_stat["nodejs_depend"]:
-                                    self.log_stat["nodejs_depend"].append(miss_depend.group(1))
-                        elif python_err_list:
-                            self.log_stat["python_err"] += len(python_err_list)
-                            self.log_stat["err_dict"][dir_name] = []
-                            for i in python_err_list:
-                                v = i[-1].strip()
-                                self.log_stat["err_dict"][dir_name].append({"type": "Python", "log": v})
-                                # 依赖缺失判断
-                                miss_depend = re.search(r"ModuleNotFoundError: No module named \'([a-zA-Z0-9_-]+)\'", v)
-                                if miss_depend and miss_depend.group(1) not in self.log_stat["python_depend"]:
-                                    self.log_stat["python_depend"].append(miss_depend.group(1))
-                        self.log_stat["all"] += 1
+                            if nodejs_err_list:
+                                self.log_stat["nodejs_err"] += len(nodejs_err_list)
+                                self.log_stat["err_dict"][dir_name] = []
+                                for i in nodejs_err_list:
+                                    v = i.strip()
+                                    self.log_stat["err_dict"][dir_name].append({"type": "NodeJs", "log": v})
+                                    # 依赖缺失判断
+                                    miss_depend = re.search(r"Cannot find module '([a-zA-Z\d_-]+)'", v)
+                                    if miss_depend and miss_depend.group(1) not in self.log_stat["nodejs_depend"]:
+                                        self.log_stat["nodejs_depend"].append(miss_depend.group(1))
+                            elif python_err_list:
+                                self.log_stat["python_err"] += len(python_err_list)
+                                self.log_stat["err_dict"][dir_name] = []
+                                for i in python_err_list:
+                                    v = i[-1].strip()
+                                    self.log_stat["err_dict"][dir_name].append({"type": "Python", "log": v})
+                                    # 依赖缺失判断
+                                    miss_depend = re.search(r"ModuleNotFoundError: No module named \'([a-zA-Z0-9_-]+)\'", v)
+                                    if miss_depend and miss_depend.group(1) not in self.log_stat["python_depend"]:
+                                        self.log_stat["python_depend"].append(miss_depend.group(1))
+                            self.log_stat["all"] += 1
+                        except Exception as e:
+                            err_log = "读取日志" + str(os.path.join(path, file_name)) + "出现异常: " + str(e) + "\n"
+                            self.log_stat["readlog_err"].append(err_log)
+                            print(err_log)
+
 
     @staticmethod
     def format_log_date(text):
@@ -116,6 +128,8 @@ class QlLogScan(Depend):
                 self.LogNameHeadList[-1]) if len(self.LogNameHeadList) != 1 else
             self.LogNameHeadList[
                 0]) + " 的日志报告：\n"
+        if len(self.log_stat["readlog_err"]) != 0:
+            result += "🔍脚本在读取日志过程中，出现了" + str(len(self.log_stat["readlog_err"])) + "个异常，详细信息将在最后展示\n"
         result += "✅正常运行脚本：" + str(self.log_stat["all"]) + " 次\n"
         if self.log_stat["all"] != 0:
             result += "⛔异常运行脚本：" + str(self.log_stat["nodejs_err"] + self.log_stat["python_err"]) + " 次，占比 " + str(
@@ -144,6 +158,10 @@ class QlLogScan(Depend):
                 result += "🛑脚本：" + k + "：\n"
                 for i in v:
                     result += "- ⚠" + i["type"] + "错误：" + i["log"] + " \n\n\n"
+        if len(self.log_stat["readlog_err"]) != 0:
+            result += "👷‍♀️读取日志异常日志：\n\n"
+            for i in self.log_stat["readlog_err"]:
+                result += "⚠" + i + "\n"
         send("🐲青龙日志分析", result)
         return result
 
