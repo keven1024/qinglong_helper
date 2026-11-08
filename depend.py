@@ -84,7 +84,7 @@ class Depend:
                     f.writelines(json.dumps(j_data))
                 try:
                     j_data = json.loads(py_data)
-                except:
+                except ValueError:
                     pass
                 if j_data["py_path"] and j_data["py_path"] == pyabspath:
                     result += "😁脚本唯一性检测通过，继续运行!\n"
